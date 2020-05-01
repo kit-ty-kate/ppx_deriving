@@ -43,7 +43,11 @@ let get_plugins () =
   | Some { pexp_desc = Pexp_tuple exprs } ->
     exprs |> List.map (fun expr ->
       match expr with
+#if OCAML_VERSION < (4, 11, 0)
       | { pexp_desc = Pexp_constant (Pconst_string (file, None)) } -> file
+#else
+      | { pexp_desc = Pexp_constant (Pconst_string (file, _, None)) } -> file
+#endif
       | _ -> assert false)
   | Some _ -> assert false
   | None -> []
@@ -54,7 +58,13 @@ let add_plugins plugins =
   List.iter load_plugin plugins;
   let loaded  = loaded @ plugins in
   Ast_mapper.set_cookie "ppx_deriving"
-    (Exp.tuple (List.map (fun file -> Exp.constant (Pconst_string (file, None))) loaded))
+    (Exp.tuple (List.map (fun file ->
+#if OCAML_VERSION < (4, 11, 0)
+       Exp.constant (Pconst_string (file, None))
+#else
+       Exp.constant (Pconst_string (file, Location.none, None))
+#endif
+     ) loaded))
 
 let mapper argv =
   get_plugins () |> List.iter load_plugin;
@@ -66,7 +76,11 @@ let mapper argv =
       elems |>
         List.map (fun elem ->
           match elem with
+#if OCAML_VERSION < (4, 11, 0)
           | { pexp_desc = Pexp_constant (Pconst_string (file, None))} -> file
+#else
+          | { pexp_desc = Pexp_constant (Pconst_string (file, _, None))} -> file
+#endif
           | _ -> assert false) |>
         add_plugins;
         mapper.Ast_mapper.structure mapper rest
@@ -75,4 +89,3 @@ let mapper argv =
 
 let () =
   Ast_mapper.register "ppx_deriving" mapper
-

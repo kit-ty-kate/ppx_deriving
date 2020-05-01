@@ -165,7 +165,11 @@ module Arg = struct
 
   let string expr =
     match expr with
+#if OCAML_VERSION < (4, 11, 0)
     | { pexp_desc = Pexp_constant (Pconst_string (n, None)) } -> Ok n
+#else
+    | { pexp_desc = Pexp_constant (Pconst_string (n, _, None)) } -> Ok n
+#endif
     | _ -> Error "string"
 
   let char = function
