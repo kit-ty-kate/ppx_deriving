@@ -62,53 +62,33 @@ let add_plugins plugins =
        (Exp.tuple (List.map (fun file ->
           Exp.constant (Pconst_string (file, None))) loaded)))
 
-let run_as_ast_mapper =
-  Ppxlib.Driver.run_as_ppx
-    ~signature:(fun sg ->
-      let config = initial_state () in
-      rewrite_signature config (module OCaml_current) sg
-      |> migrate_some_signature (module OCaml_current)
-    )
-    ~structure:(fun str ->
-      let config = initial_state () in
-      rewrite_structure config (module OCaml_current) str
-      |> migrate_some_structure (module OCaml_current)
-    )
-
 let mapper argv =
   get_plugins () |> List.iter load_plugin;
   add_plugins argv;
-  let copy_structure_item item =
-    match From_current.copy_structure [item] with
-    | [item] -> item
-    | _ -> failwith "Ppx_deriving_main.copy_structure_item" in
-  let module Current_ast = Ppxlib.Import_for_core.Ocaml in
-  let omp_mapper = Migrate_parsetree.Driver.run_as_ast_mapper [] in
-  let structure mapper s =
+  let module Current_ast = Ppxlib_ast.Selected_ast in
+  let structure s =
     match s with
     | [] -> []
     | hd :: tl ->
-        match
-          try Some (copy_structure_item hd)
-          with Migrate_parsetree.Def.Migration_error (_, _) -> None
-        with
-        | Some ([%stri [@@@findlib.ppxopt [%e? { pexp_desc = Pexp_tuple (
-            [%expr "ppx_deriving"] :: elems) }]]]) ->
-            elems |>
-            List.map (fun elem ->
-              match elem with
-              | { pexp_desc = Pexp_constant (Pconst_string (file, None))} ->
-                  file
-              | _ -> assert false) |>
-            add_plugins;
-            mapper.Current_ast.Ast_mapper.structure mapper tl
-        | _ -> omp_mapper.Current_ast.Ast_mapper.structure mapper s in
-  { omp_mapper with Current_ast.Ast_mapper.structure }
+      match hd with
+      | [%stri [@@@findlib.ppxopt [%e? { pexp_desc = Pexp_tuple (
+          [%expr "ppx_deriving"] :: elems) }]]] ->
+        elems |>
+        List.map (fun elem ->
+            match elem with
+            | { pexp_desc = Pexp_constant (Pconst_string (file, None))} ->
+              file
+            | _ -> assert false) |>
+        add_plugins;
+        Ppxlib.Driver.map_structure tl
+      | _ -> Ppxlib.Driver.map_structure s
+  in
+  let structure _ st =
+    Current_ast.of_ocaml Structure st
+    |> structure
+    |> Current_ast.to_ocaml Structure
+  in
+  { Ast_mapper.default_mapper with structure }
 
 let () =
-  Ast_mapper.register "ppx_deriving"
-    ~preprocess_impl:map_structure
-    ~preprocess_intf:map_signature
-
-let () =
-  Ppxlib.Driver.run_as_ppx_rewriter
+  Ast_mapper.register "ppx_deriving" mapper
