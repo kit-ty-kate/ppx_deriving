@@ -5,8 +5,11 @@ open Ast_helper
 
 module Ast_mapper = Ocaml_common.Ast_mapper
 
-module From_current = Ppxlib_ast.Selected_ast.Of_ocaml
-module To_current = Ppxlib_ast.Selected_ast.To_ocaml
+module From_current =
+  Ppxlib_ast.Selected_ast.Of_ocaml
+
+module To_current =
+  Ppxlib_ast.Selected_ast.To_ocaml
 
 let raise_errorf = Ppx_deriving.raise_errorf
 
@@ -70,18 +73,20 @@ let mapper argv =
     match s with
     | [] -> []
     | hd :: tl ->
-      match hd with
-      | [%stri [@@@findlib.ppxopt [%e? { pexp_desc = Pexp_tuple (
-          [%expr "ppx_deriving"] :: elems) }]]] ->
-        elems |>
-        List.map (fun elem ->
-            match elem with
-            | { pexp_desc = Pexp_constant (Pconst_string (file, None))} ->
-              file
-            | _ -> assert false) |>
-        add_plugins;
-        Ppxlib.Driver.map_structure tl
-      | _ -> Ppxlib.Driver.map_structure s
+        match
+          hd
+        with
+        | ([%stri [@@@findlib.ppxopt [%e? { pexp_desc = Pexp_tuple (
+            [%expr "ppx_deriving"] :: elems) }]]]) ->
+            elems |>
+            List.map (fun elem ->
+              match elem with
+              | { pexp_desc = Pexp_constant (Pconst_string (file, None))} ->
+                  file
+              | _ -> assert false) |>
+            add_plugins;
+            Ppxlib.Driver.map_structure tl
+        | _ -> Ppxlib.Driver.map_structure s
   in
   let structure _ st =
     Current_ast.of_ocaml Structure st
